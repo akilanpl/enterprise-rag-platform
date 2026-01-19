@@ -1,44 +1,68 @@
-# Enterprise RAG Platform
+# Application Architecture
 
-An **enterprise-ready Retrieval-Augmented Generation (RAG) platform** designed for secure, on-premise and private-cloud deployments.  
-This system enables organizations to query internal knowledge bases using large language models while maintaining **data privacy, security, and controlled evaluation**.
-
----
-
-##  Overview
-
-This project implements an end-to-end **RAG pipeline** that combines:
-- Document ingestion and preprocessing
-- Vector-based semantic retrieval
-- Context-aware LLM response generation
-- Modular, extensible architecture suitable for enterprise environments
-
-The platform is designed to be **deployment-agnostic**, supporting local, on-prem, or private infrastructure without reliance on external data sharing.
+This directory contains the **core implementation** of the Enterprise RAG Platform.  
+Each module is designed with clear responsibility boundaries to support scalability, testing, and enterprise deployment.
 
 ---
 
-## Key Features
+##  Module Overview
 
-- **End-to-End RAG Pipeline**
-  - Document ingestion (text-based sources)
-  - Chunking and embedding generation
-  - Vector similarity search
-  - Context-grounded LLM inference
+### `api/`
+- External interfaces (REST / service endpoints)
+- Acts as the entry point for user or system queries
 
-- **Enterprise-Focused Design**
-  - On-prem / private deployment ready
-  - No mandatory external API dependency
-  - Configurable model and vector store backends
+### `core/`
+- Shared abstractions and base components
+- Configuration loading, common utilities, and contracts
 
-- **Modular Architecture**
-  - Clean separation of ingestion, retrieval, and generation layers
-  - Easy to extend with new models, retrievers, or data sources
+### `Ingestion/`
+- Document loading and preprocessing
+- Chunking strategies
+- Embedding generation pipeline
 
-- **Evaluation-Ready**
-  - Designed to support custom evaluation metrics
-  - Enables experimentation with retrieval strategies and prompt design
+### `Retrieval/`
+- Vector similarity search
+- Retriever abstractions
+- Store-agnostic retrieval logic
+
+### `Generation/`
+- Prompt construction
+- Context injection
+- LLM response orchestration
+
+### `Evaluation/`
+- Hooks for retrieval and generation evaluation
+- Designed for offline and online metrics
+- Supports experimentation and benchmarking
+
+### `Observability/`
+- Logging, tracing, and monitoring hooks
+- Designed for production diagnostics
+
+### `Orchestration/`
+- Coordinates ingestion → retrieval → generation flow
+- Central control layer for pipeline execution
+
+### `Infra/`
+- Infrastructure-related configuration
+- Deployment or environment abstractions
+
+### `Scripts/`
+- Utility and helper scripts
+- One-off or administrative tasks
 
 ---
 
+##  Entry Point
 
+- `main.py` serves as the application entry point
+- Initializes configuration and orchestrates the RAG pipeline
+
+---
+
+##  Design Principles
+
+- Separation of concerns
+- Backend-agnostic components
+- Enterprise-first thinking (privacy, control, extensibility)
 
