@@ -15,7 +15,5 @@ This repository focuses on **system design**, **modularity**, and **enterprise c
 - Evaluation readiness
 - Observability
 
----
 
-## 🧠 High-Level Architecture
 
