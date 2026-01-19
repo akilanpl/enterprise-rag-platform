@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: enterprise-rag
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: api
+          image: enterprise-rag:latest
+          ports:
+            - containerPort: 8000
