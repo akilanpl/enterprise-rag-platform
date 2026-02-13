@@ -3,6 +3,8 @@ def has_access(user_role: str, doc_role: str) -> bool:
         "public": 0,
         "employee": 1,
         "manager": 2,
-        "admin": 3
+        "admin": 3,
     }
-    return role_hierarchy[user_role] >= role_hierarchy[doc_role]
+    user_level = role_hierarchy.get(user_role, -1)
+    doc_level = role_hierarchy.get(doc_role, 0)
+    return user_level >= doc_level
