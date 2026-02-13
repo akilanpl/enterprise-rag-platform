@@ -1,5 +1,7 @@
-from app.core.cache import get_cached, set_cached
+from app.generation.generator import generate_answer
 from app.observability.latency import track_latency
+from app.retrieval.retriever import retrieve
+
 
 def run_rag(query, embedding, user_role):
     timings = {}

@@ -2,7 +2,6 @@ from openai import OpenAI
 from app.core.prompts import SYSTEM_PROMPT
 from app.core.prompt_firewall import sanitize_context
 from app.observability.cost import record_cost
-from app.core.tenant import get_tenant
 
 client = OpenAI()
 
@@ -13,8 +12,6 @@ def generate_answer(query, context_docs):
     - deterministic output
     - tenant-aware cost tracking
     """
-
-    tenant = get_tenant() or "default"
 
     # 🔒 Sanitize retrieved context
     safe_context_blocks = []
