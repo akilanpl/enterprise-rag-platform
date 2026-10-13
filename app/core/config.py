@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     rerank_revision: str | None = None
     embedding_dimensions: int = Field(default=1024, ge=8, le=4096)
     rerank_model: str | None = None
-    generation_backend: Literal["extractive", "openai"] = "extractive"
+    generation_backend: Literal["extractive", "openai", "ollama"] = "extractive"
+    ollama_url: str = "http://localhost:11434"
     allow_remote_generation: bool = False
     openai_api_key: SecretStr | None = None
     generation_model: str = "gpt-4o"

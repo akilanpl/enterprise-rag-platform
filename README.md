@@ -28,7 +28,7 @@ The platform can keep documents and inference on your infrastructure. The defaul
 | Authorization | Qdrant filters tenant and permitted document roles **before** returning candidate text. Tenant administrators control ingestion and deletion. |
 | Ingestion | Bounded text ingestion, local PDF extraction utility, overlapping chunks, deterministic content/version IDs, and retry-safe upserts. |
 | Retrieval | Cosine vector search, model-specific collections, tenant-scoped embedding cache, and optional cross-encoder reranking. |
-| Generation | Local cited excerpts or opt-in hosted generation; no-authorized-evidence requests return an insufficient-information response. |
+| Generation | Local cited excerpts, on-premises Ollama, or opt-in hosted generation; no-authorized-evidence requests return an insufficient-information response. |
 | Governance | Atomic monthly budget reservations, separate input/output prices, persistent token usage, and conservative handling of ambiguous provider failures. |
 | Reliability | Dependency timeouts, startup validation, actual request-byte limits, distributed Redis limits, safe error responses, and separate live/ready probes. |
 | Observability | Low-cardinality Prometheus counters/histograms, correlated structured request logs, durable usage/citation records, and owned feedback. |
@@ -135,6 +135,18 @@ docker compose up --build -d
 
 Model loading happens at startup. Provision enough memory and allow the initial download in a controlled environment, or populate the model cache before starting an offline deployment. Set model revisions or use local model paths for reproducibility. Changing embedding backend, model, revision, or dimensions selects a different collection; **reingest documents** for that configuration. Reranking is optional; without it, vector scores determine ordering.
 
+### Enable an on-premises generative model
+
+With a separately provisioned Ollama server and approved local model:
+
+```dotenv
+GENERATION_BACKEND=ollama
+OLLAMA_URL=http://your-private-ollama-service:11434
+GENERATION_MODEL=your-provisioned-local-model
+```
+
+The server must be reachable from the API container and already have the model available. Requests use nonstreaming generation and the output-token cap. Input/output token counts are persisted; provider-dollar cost is zero, and local hardware/energy costs are outside this ledger. Restrict the model-server endpoint to your private network. This backend does not require hosted-provider data-egress consent.
+
 ### Enable hosted generation
 
 Keep local retrieval and explicitly configure:
@@ -222,7 +234,8 @@ Settings come from environment variables or `.env`, validated before serving tra
 | `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` | `BAAI/bge-large-en-v1.5`, `1024`; dimensions checked at startup. |
 | `EMBEDDING_REVISION`, `RERANK_REVISION` | Optional model commit revisions. |
 | `RERANK_MODEL` | Unset; optional cross encoder. |
-| `GENERATION_BACKEND` | `extractive`; optional `openai` with separate consent and prices. |
+| `GENERATION_BACKEND` | `extractive`; `ollama` for private local inference, or `openai` with separate consent and prices. |
+| `OLLAMA_URL` | `http://localhost:11434`; private model-server URL for Ollama generation. |
 | `ALLOW_REMOTE_GENERATION` | `false`; required `true` for hosted generation. |
 | `MONTHLY_BUDGET_USD` | `10` independently enforced for each tenant in each UTC month. |
 | `MAX_OUTPUT_TOKENS` | `600`; hosted generation output cap. |

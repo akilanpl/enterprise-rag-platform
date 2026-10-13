@@ -14,6 +14,8 @@ Application logs contain generated request identifiers, route templates, status,
 
 The prompt labels sources and questions as untrusted data. A heuristic filter withholds excerpts containing selected suspicious patterns. This may produce false positives and does not catch every injection. Tenant/role predicates enforce authorization before a model sees any content.
 
+Local Ollama generation sends authorized excerpts to the operator-configured model-server URL; keep that endpoint private and under your control.
+
 Hosted generation is disabled by default and requires explicit data-egress consent, provider credentials, and numeric prices. When enabled, the question and retrieved authorized excerpts are sent to the hosted provider. Verify provider retention, region, contractual controls, and permitted data classes for your environment.
 
 Citation labels in generated prose and a request to answer only from context do not prove grounding. Evaluate unsupported claims and citation accuracy using representative data. Local extractive mode quotes authorized source excerpts and does not synthesize a new answer.

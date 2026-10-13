@@ -16,7 +16,9 @@ def run_rag(resources, principal, query, request_id=None):
     STAGE_LATENCY.labels("retrieval").observe(time.monotonic() - start)
     prompt = resources.generator.prepare(query, docs)
     reservation = resources.generator.reservation(prompt) if docs else 0
-    model = settings.generation_model if settings.generation_backend == "openai" else "extractive"
+    model = (
+        settings.generation_model if settings.generation_backend != "extractive" else "extractive"
+    )
     identifier = resources.ledger.reserve(
         principal, model, reservation, settings.monthly_budget_usd, request_id=request_id
     )

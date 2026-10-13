@@ -307,3 +307,41 @@ def test_embedding_model_identity_changes_collection(service):
     resources.settings.embedding_revision = "different-revision"
     assert resources.settings.collection_name != previous
     resources.settings.embedding_revision = None
+
+
+def test_local_ollama_generation_stays_on_configured_endpoint(service):
+    import httpx
+
+    _, resources = service
+    settings = resources.settings.model_copy(
+        update={
+            "generation_backend": "ollama",
+            "ollama_url": "http://local-model:11434",
+            "generation_model": "local-approved",
+        }
+    )
+    generator = Generator(settings)
+
+    def respond(request):
+        assert str(request.url) == "http://local-model:11434/api/chat"
+        payload = json.loads(request.content)
+        assert payload["stream"] is False
+        assert payload["options"]["num_predict"] == settings.max_output_tokens
+        return httpx.Response(
+            200,
+            json={
+                "message": {"content": "Twenty days [DOC 0]"},
+                "prompt_eval_count": 100,
+                "eval_count": 10,
+            },
+        )
+
+    generator.client.close()
+    generator.client = httpx.Client(transport=httpx.MockTransport(respond))
+    docs = [Document("Twenty days vacation", {"document_id": "x"}, 1)]
+    prompt = generator.prepare("vacation?", docs)
+    output = generator.generate("vacation?", docs, prompt)
+    assert output.prompt_tokens == 100
+    assert output.completion_tokens == 10
+    assert output.cost == generator.reservation(prompt) == 0
+    generator.close()

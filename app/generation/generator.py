@@ -45,6 +45,27 @@ class Generator:
                 f"{sanitize_context(doc.page_content)} [DOC {i}]" for i, doc in enumerate(docs)
             ]
             return Generation("\n\n".join(excerpts))
+        if self.settings.generation_backend == "ollama":
+            response = self.client.post(
+                self.settings.ollama_url.rstrip("/") + "/api/chat",
+                json={
+                    "model": self.settings.generation_model,
+                    "stream": False,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "options": {"temperature": 0, "num_predict": self.settings.max_output_tokens},
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return Generation(
+                data["message"]["content"],
+                data.get("prompt_eval_count", 0),
+                data.get("eval_count", 0),
+                0,
+            )
         response = self.client.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": "Bearer " + self.settings.openai_api_key.get_secret_value()},
