@@ -277,6 +277,15 @@ TEST_REDIS_URL='redis://localhost:6379/15' \
 TEST_QDRANT_URL='http://localhost:6333' pytest -q
 ```
 
+An opt-in smoke test validates real semantic embeddings and cross-encoder inference with small public models:
+
+```bash
+pip install -e '.[models]'
+RUN_MODEL_TESTS=1 pytest tests/test_models.py -q
+```
+
+This downloads model weights unless already cached. It verifies the inference adapters and a simple ranking case; it does not establish production retrieval quality or benchmark the larger default models.
+
 Use a labeled JSONL dataset to measure retrieval recall on your documents:
 
 ```json

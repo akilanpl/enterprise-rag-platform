@@ -345,3 +345,14 @@ def test_local_ollama_generation_stays_on_configured_endpoint(service):
     assert output.completion_tokens == 10
     assert output.cost == generator.reservation(prompt) == 0
     generator.close()
+
+
+def test_tiny_budget_amounts_round_up_without_free_allowance(service):
+    _, resources = service
+    principal = Principal(resources.settings.api_keys[0].tenant, "precision-test", "admin")
+    identifier = resources.ledger.reserve(principal, "test", 0.000000001, 1)
+    assert resources.ledger.usage(principal)["reserved_usd"] == 0.00000001
+    resources.ledger.settle(identifier, 0.000000001, 1, 0, [])
+    usage = resources.ledger.usage(principal)
+    assert usage["reserved_usd"] == 0
+    assert usage["spent_usd"] == 0.00000001

@@ -27,7 +27,7 @@ class Embedder:
                 revision=settings.embedding_revision,
                 trust_remote_code=False,
             )
-            if self.model.get_sentence_embedding_dimension() != settings.embedding_dimensions:
+            if self.model.get_embedding_dimension() != settings.embedding_dimensions:
                 raise ValueError("Embedding dimensions do not match model")
 
     def encode(self, texts):

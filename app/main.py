@@ -84,10 +84,6 @@ def create_app(settings=None, resources=None):
         identifier = str(uuid.uuid4())
         request.state.trace_id = identifier
         started = time.monotonic()
-        # Ingress also needs a request-body limit; this catches honest oversized clients.
-        length = request.headers.get("content-length", "0")
-        if not length.isdigit() or int(length) > 4_100_000:
-            return JSONResponse({"detail": "Request body too large"}, status_code=413)
         try:
             response = await call_next(request)
         except Exception:

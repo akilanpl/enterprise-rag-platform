@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import (
@@ -73,7 +73,7 @@ class Ledger:
     def reserve(self, principal, model, amount, budget, request_id=None):
         now = datetime.now(timezone.utc)
         month = now.strftime("%Y-%m")
-        amount = Decimal(str(amount)).quantize(Decimal("0.00000001"))
+        amount = Decimal(str(amount)).quantize(Decimal("0.00000001"), rounding=ROUND_CEILING)
         with self.sessions() as session:
             if session.get(Budget, (principal.tenant, month)) is None:
                 session.add(Budget(tenant=principal.tenant, month=month))
@@ -115,7 +115,11 @@ class Ledger:
             if record.status != "reserved":
                 return
             # An ambiguous provider failure retains its full reservation as a charge.
-            charged = record.reservation if failed else Decimal(str(cost))
+            charged = (
+                record.reservation
+                if failed
+                else Decimal(str(cost)).quantize(Decimal("0.00000001"), rounding=ROUND_CEILING)
+            )
             session.execute(
                 update(Budget)
                 .where(
