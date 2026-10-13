@@ -13,3 +13,6 @@ vectorstore/
 .ruff_cache/
 .coverage
 models/
+
+build/
+dist/
