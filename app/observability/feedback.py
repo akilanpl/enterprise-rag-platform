@@ -1,7 +1,1 @@
-FEEDBACK = []
-
-def record_feedback(query, rating):
-    FEEDBACK.append({
-        "query": query,
-        "rating": rating
-    })
+"""Feedback is persisted with authenticated request ownership by Ledger.feedback."""

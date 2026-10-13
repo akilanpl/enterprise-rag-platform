@@ -1,5 +1,9 @@
-from langchain.document_loaders import PyPDFLoader
+from pathlib import Path
 
-def load_pdf(path: str):
-    loader = PyPDFLoader(path)
-    return loader.load()
+from pypdf import PdfReader
+
+
+def load_pdf(path: str) -> str:
+    """Operator-only local loader; no API accepts filesystem paths or arbitrary URLs."""
+    with Path(path).open("rb") as source:
+        return "\n".join(page.extract_text() or "" for page in PdfReader(source).pages)

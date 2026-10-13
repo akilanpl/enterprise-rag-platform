@@ -1,62 +1,95 @@
-from openai import OpenAI
-from app.core.prompts import SYSTEM_PROMPT
+import json
+from dataclasses import dataclass
+
+import httpx
+
 from app.core.prompt_firewall import sanitize_context
-from app.observability.cost import record_cost
+from app.core.prompts import SYSTEM_PROMPT
 
-client = OpenAI()
 
-def generate_answer(query, context_docs):
-    """
-    Enterprise-grade generation with:
-    - prompt-injection defense
-    - deterministic output
-    - tenant-aware cost tracking
-    """
+@dataclass(frozen=True)
+class Generation:
+    answer: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost: float = 0
 
-    # 🔒 Sanitize retrieved context
-    safe_context_blocks = []
-    for doc in context_docs:
-        clean_text = sanitize_context(doc.page_content)
-        safe_context_blocks.append(clean_text)
 
-    context = "\n\n".join(
-        f"[DOC {i}] {text}"
-        for i, text in enumerate(safe_context_blocks)
-    )
+class Generator:
+    def __init__(self, settings):
+        self.settings = settings
+        self.client = httpx.Client(timeout=settings.dependency_timeout_seconds)
 
-    user_prompt = f"""
-Context (trusted, sanitized):
-{context}
+    def prepare(self, query, docs):
+        sources = [
+            {"label": f"DOC {i}", "text": sanitize_context(doc.page_content)}
+            for i, doc in enumerate(docs)
+        ]
+        return json.dumps({"question": query, "sources": sources}, ensure_ascii=True)
 
-Question:
-{query}
+    def reservation(self, prompt):
+        if self.settings.generation_backend != "openai":
+            return 0
+        # Byte length conservatively bounds token count, plus message framing overhead.
+        input_bound = len((prompt + SYSTEM_PROMPT).encode()) + 1024
+        return (
+            input_bound * self.settings.input_usd_per_million
+            + self.settings.max_output_tokens * self.settings.output_usd_per_million
+        ) / 1_000_000
 
-Rules:
-- Answer ONLY using the context above
-- If insufficient information exists, say so
-- Cite documents using [DOC X]
-"""
+    def generate(self, query, docs, prompt):
+        if not docs:
+            return Generation("Insufficient information in the authorized documents.")
+        if self.settings.generation_backend == "extractive":
+            excerpts = [
+                f"{sanitize_context(doc.page_content)} [DOC {i}]" for i, doc in enumerate(docs)
+            ]
+            return Generation("\n\n".join(excerpts))
+        if self.settings.generation_backend == "ollama":
+            response = self.client.post(
+                self.settings.ollama_url.rstrip("/") + "/api/chat",
+                json={
+                    "model": self.settings.generation_model,
+                    "stream": False,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "options": {"temperature": 0, "num_predict": self.settings.max_output_tokens},
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return Generation(
+                data["message"]["content"],
+                data.get("prompt_eval_count", 0),
+                data.get("eval_count", 0),
+                0,
+            )
+        response = self.client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": "Bearer " + self.settings.openai_api_key.get_secret_value()},
+            json={
+                "model": self.settings.generation_model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0,
+                "max_tokens": self.settings.max_output_tokens,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        usage = data["usage"]
+        input_tokens, output_tokens = usage["prompt_tokens"], usage["completion_tokens"]
+        cost = (
+            input_tokens * self.settings.input_usd_per_million
+            + output_tokens * self.settings.output_usd_per_million
+        ) / 1_000_000
+        return Generation(
+            data["choices"][0]["message"]["content"], input_tokens, output_tokens, cost
+        )
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=0,
-        max_tokens=600
-    )
-
-    answer = response.choices[0].message.content
-
-    # 💰 TOKEN + COST CAPTURE (THIS IS WHAT YOU ASKED ABOUT)
-    usage = response.usage
-
-    record_cost(
-        prompt_tokens=usage.prompt_tokens,
-        completion_tokens=usage.completion_tokens,
-        model="gpt-4o",
-        query=query
-    )
-
-    return answer
+    def close(self):
+        self.client.close()

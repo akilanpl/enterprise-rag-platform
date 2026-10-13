@@ -1,0 +1,39 @@
+name: validate
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.9-alpine
+        env: {POSTGRES_USER: rag, POSTGRES_PASSWORD: test-only, POSTGRES_DB: rag_test}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rag -d rag_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7.4.4-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+      qdrant:
+        image: qdrant/qdrant:v1.14.1
+        ports: ['6333:6333']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.lock && pip install -e '.[test]'
+      - run: ruff check app scripts tests && ruff format --check app scripts tests
+      - run: pytest -q
+      - name: Real PostgreSQL, Redis, and Qdrant integration
+        run: pytest -q
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://rag:test-only@localhost:5432/rag_test
+          TEST_REDIS_URL: redis://localhost:6379/15
+          TEST_QDRANT_URL: http://localhost:6333
+      - run: pip install pip-audit && pip-audit -r requirements.lock
+      - run: docker build -t enterprise-rag:ci .

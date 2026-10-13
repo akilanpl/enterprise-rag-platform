@@ -1,13 +1,94 @@
+# Supply rag-config and rag-secrets before applying. See docs/operations.md.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: enterprise-rag
+  labels: {app: enterprise-rag}
 spec:
-  replicas: 3
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app: enterprise-rag}
+  strategy:
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
   template:
+    metadata:
+      labels: {app: enterprise-rag}
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: api
-          image: enterprise-rag:latest
-          ports:
-            - containerPort: 8000
+          # Replace with your immutable registry digest before applying.
+          image: enterprise-rag:0.2.0
+          ports: [{name: http, containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: rag-config}
+            - secretRef: {name: rag-secrets}
+          env:
+            - {name: ENVIRONMENT, value: production}
+            - {name: EMBEDDING_BACKEND, value: sentence-transformer}
+            - {name: HF_HUB_OFFLINE, value: '1'}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: '1', memory: 4Gi}
+            limits: {cpu: '4', memory: 8Gi}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            failureThreshold: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            timeoutSeconds: 35
+            periodSeconds: 40
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            timeoutSeconds: 5
+            periodSeconds: 20
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: models, mountPath: /models, readOnly: true}
+      volumes:
+        - {name: tmp, emptyDir: {sizeLimit: 256Mi}}
+        - name: models
+          persistentVolumeClaim: {claimName: rag-models}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enterprise-rag
+spec:
+  selector: {app: enterprise-rag}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: enterprise-rag
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: enterprise-rag}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: enterprise-rag
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: enterprise-rag}
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}

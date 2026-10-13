@@ -1,63 +1,33 @@
-from fastapi import APIRouter
-from qdrant_client import QdrantClient
-import redis
-import os
 import time
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-START_TIME = time.time()
-
-# External dependencies
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-
-qdrant = QdrantClient(url=QDRANT_URL)
-redis_client = redis.Redis(host=REDIS_HOST, port=6379)
-
 
 @router.get("/health/live")
-def liveness():
-    """
-    Kubernetes liveness probe.
-    If this fails, pod will be restarted.
-    """
-    return {
-        "status": "alive",
-        "uptime_seconds": int(time.time() - START_TIME)
-    }
-
+def liveness(request: Request):
+    return {"status": "alive", "uptime_seconds": int(time.monotonic() - request.app.state.started)}
 
 
 @router.get("/health/ready")
-def readiness():
-    """
-    Kubernetes readiness probe.
-    If this fails, pod will be removed from service.
-    """
-
-    checks = {
-        "qdrant": False,
-        "redis": False
+def readiness(request: Request):
+    resources = request.app.state
+    checks = {}
+    probes = {
+        "redis": resources.redis.ping,
+        "database": resources.ledger.ping,
+        "qdrant": lambda: resources.qdrant.get_collection(resources.settings.collection_name),
     }
-
-    # Check Qdrant
-    try:
-        qdrant.get_collections()
-        checks["qdrant"] = True
-    except Exception:
-        checks["qdrant"] = False
-
-    # Check Redis
-    try:
-        redis_client.ping()
-        checks["redis"] = True
-    except Exception:
-        checks["redis"] = False
-
+    for name, probe in probes.items():
+        try:
+            probe()
+            checks[name] = True
+        except Exception:
+            checks[name] = False
     ready = all(checks.values())
-
-    return {
-        "status": "ready" if ready else "not_ready",
-        "checks": checks
-    }
+    return JSONResponse(
+        {"status": "ready" if ready else "not_ready", "checks": checks},
+        status_code=200 if ready else 503,
+    )
