@@ -1,15 +1,23 @@
-import redis
-import json
 import hashlib
+import json
 
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
-def _key(*args):
-    raw = "::".join(args)
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-def get_cached(namespace, key):
-    return redis_client.get(_key(namespace, key))
-
-def set_cached(namespace, key, value, ttl=300):
-    redis_client.setex(_key(namespace, key), ttl, json.dumps(value))
+def query_embedding(client, embedder, settings, tenant, query):
+    identity = json.dumps(
+        [
+            tenant,
+            settings.embedding_backend,
+            settings.embedding_model,
+            settings.embedding_revision,
+            settings.embedding_dimensions,
+            query,
+        ],
+        separators=(",", ":"),
+    )
+    key = "embedding:" + hashlib.sha256(identity.encode()).hexdigest()
+    cached = client.get(key)
+    if cached:
+        return json.loads(cached)
+    vector = embedder.encode([query])[0]
+    client.setex(key, settings.embedding_cache_ttl, json.dumps(vector))
+    return vector

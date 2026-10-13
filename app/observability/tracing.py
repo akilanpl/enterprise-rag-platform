@@ -1,6 +1,18 @@
-def trace(query, docs, answer):
-    return {
-        "query": query,
-        "doc_ids": [d.metadata.get("doc_id") for d in docs],
-        "answer_length": len(answer)
-    }
+import json
+import logging
+
+logger = logging.getLogger("enterprise_rag")
+
+
+def log_request(request_id, route, status, duration):
+    logger.info(
+        json.dumps(
+            {
+                "event": "http_request",
+                "request_id": request_id,
+                "route": route,
+                "status": status,
+                "duration_seconds": duration,
+            }
+        )
+    )

@@ -8,3 +8,8 @@ venv/
 *.log
 data/
 vectorstore/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+models/

@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16.9-alpine
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_DB: rag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/configure.py first}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U rag -d rag']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.4-alpine
+    command: [redis-server, --appendonly, 'yes', --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  qdrant:
+    image: qdrant/qdrant:v1.14.1
+    volumes: [qdrant_data:/qdrant/storage]
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      args:
+        INSTALL_MODELS: ${INSTALL_MODELS:-false}
+    env_file: .env
+    ports: ['127.0.0.1:8000:8000']
+    volumes: [model_cache:/models]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      qdrant: {condition: service_started}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=15)"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  model_cache:

@@ -1,15 +1,10 @@
-INJECTION_PATTERNS = [
-    "ignore previous instructions",
-    "system prompt",
-    "act as",
-    "override",
-    "you are now",
-    "disregard above"
-]
+import re
+
+PATTERN = re.compile(
+    r"ignore previous instructions|system prompt|disregard above|override instructions", re.I
+)
+
 
 def sanitize_context(text: str) -> str:
-    lowered = text.lower()
-    for pattern in INJECTION_PATTERNS:
-        if pattern in lowered:
-            return "[REMOVED: POTENTIAL PROMPT INJECTION]"
-    return text
+    # Heuristic only. Authorization is enforced before retrieval, never by a model.
+    return "[Content withheld: potential instruction injection]" if PATTERN.search(text) else text
