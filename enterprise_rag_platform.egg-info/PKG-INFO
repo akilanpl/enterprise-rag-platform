@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: enterprise-rag-platform
+Version: 0.2.0
+Summary: Tenant-isolated retrieval and persistent usage governance
+Requires-Python: >=3.11
+Requires-Dist: fastapi==0.143.0
+Requires-Dist: starlette==1.8.0
+Requires-Dist: uvicorn[standard]==0.34.2
+Requires-Dist: pydantic-settings==2.9.1
+Requires-Dist: qdrant-client==1.14.2
+Requires-Dist: redis==6.1.0
+Requires-Dist: SQLAlchemy==2.0.41
+Requires-Dist: psycopg[binary]==3.2.9
+Requires-Dist: httpx==0.28.1
+Requires-Dist: prometheus-client==0.22.0
+Requires-Dist: pypdf==6.20.1
+Provides-Extra: models
+Requires-Dist: sentence-transformers==4.1.0; extra == "models"
+Provides-Extra: test
+Requires-Dist: pytest==9.1.1; extra == "test"
+Requires-Dist: fakeredis[lua]==2.29.0; extra == "test"
+Requires-Dist: ruff==0.11.13; extra == "test"
