@@ -18,7 +18,7 @@ The platform can keep documents and inference on your infrastructure. The defaul
 - [Testing and evaluation](#testing-and-evaluation)
 - [Deployment and operations](#deployment-and-operations)
 - [Repository layout](#repository-layout)
-- [Compatibility and limitations](#compatibility-and-limitations)
+- [API and storage compatibility](#api-and-storage-compatibility)
 
 ## Capabilities
 
@@ -62,6 +62,43 @@ flowchart LR
 The authenticated principal is passed explicitly to storage operations. There is no default tenant and no mutable global tenant context. Collections are partitioned by an embedding-configuration fingerprint; tenant and role are additional mandatory filters inside each collection. The API process is horizontally scalable when replicas share PostgreSQL, Redis, Qdrant, credentials, and model configuration.
 
 See [architecture and failure semantics](docs/architecture.md) for request sequences, storage contracts, and tradeoffs.
+
+### Retrieval and collection identity
+
+The [retriever](app/retrieval/retriever.py) sends mandatory tenant and permitted-role predicates to Qdrant with the vector query, before candidate text is returned. Embedding similarity is therefore evaluated within the authorized search space. `TOP_K` bounds candidates; the optional [cross encoder](app/retrieval/reranker.py) reranks those candidates and retains `RERANK_TOP_K`. Reranking cannot expand access to another tenant's documents.
+
+The collection name binds the embedding backend, model, revision and dimensions through [validated settings](app/core/config.py). This prevents vectors from incompatible model configurations from silently sharing a collection. Query embeddings are cached by tenant and model identity; the lexical hash backend is a deterministic development fixture, while semantic deployments use normalized sentence-transformer representations.
+
+Ingestion creates a content-version document ID from title, role and text hash, then derives chunk IDs from tenant, document version and chunk position. The [indexer](app/ingestion/indexer.py) uses retry-safe upserts; a changed document is a new version. This supports explicit replacement/deletion without claiming transactional visibility across all vector points.
+
+### Request and accounting lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Authenticated client
+    participant A as RAG pipeline
+    participant Q as Qdrant
+    participant L as Persistent ledger
+    participant G as Configured generator
+    C->>A: Query bound to server-derived principal
+    A->>A: Rate admission and query embedding
+    A->>Q: Vector search with tenant and role filters
+    Q-->>A: Authorized candidates
+    A->>A: Optional reranking and prompt preparation
+    A->>L: Reserve allowance and create request record
+    L-->>A: Committed reservation
+    A->>G: Generate from selected evidence
+    alt Successful generation
+        G-->>A: Answer and reported usage
+        A->>L: Settle usage and release unused reservation
+        A-->>C: Answer, sources, request ID and usage
+    else Ambiguous generator failure
+        A->>L: Charge reservation conservatively
+        A-->>C: Safe failure response
+    end
+```
+
+The [pipeline](app/orchestration/rag_pipeline.py) writes accounting state before invoking generation. The [ledger](app/core/database.py) admits a reservation through a conditional database update and settles a reserved request under a row lock. Requests without authorized evidence reserve zero and return the generator's insufficient-information response. These are application-level accounting rules; configured prices and provider invoices determine their monetary interpretation.
 
 ## Quick start
 
@@ -298,6 +335,8 @@ python scripts/evaluate.py dataset.jsonl --minimum-recall 0.8
 
 The CLI reports mean recall, latency, and generation cost; it fails if recall misses your threshold. It makes real API requests that consume rate allowance and may incur hosted generation charges. Evaluate each access role and tenant separately, including negative cases. The optional RAGAS adapter requires a separately validated RAGAS installation and evaluation-provider configuration; it is not part of the default runtime.
 
+For a reproducible comparison, retain the JSONL query set and expected document-version IDs, source commit, corpus/ingestion identity, embedding and reranker revisions, principal role, `TOP_K` settings and generation mode. [The evaluation CLI](scripts/evaluate.py) measures document recall from returned citations through `/v1/chat`; its latency includes the complete HTTP request and any enabled generation. It does not isolate retrieval-stage latency, score answer faithfulness, or establish statistical significance. Compare configurations on the same authorized corpus and report case count, mean recall, mean latency and cost together. Functional security tests and model-adapter smoke tests remain separate from corpus-quality measurements.
+
 ## Deployment and operations
 
 Compose is a persistent local stack. PostgreSQL, Redis, and Qdrant are not published on host ports; the API binds loopback. It does not provide production TLS, database HA, or a complete cluster network policy.
@@ -327,10 +366,12 @@ Dockerfile          Non-root runtime image
 requirements.lock   Pinned runtime dependency resolution
 ```
 
-## Compatibility and limitations
+## API and storage compatibility
 
 This release replaces the scaffold's `POST /chat?query=...&tenant_id=...&user_role=...` interface with authenticated `POST /v1/chat` JSON. Ingestion and retrieval now share one collection contract. Existing scaffold collections are not migrated automatically; reingest approved source documents into the new model-specific collection.
 
 The platform implements service API-key identity, not end-user SSO/OIDC or an organization provisioning UI. Document authorization uses tenant-local role levels, not per-user ACLs. Ingestion is synchronous and bounded; background queues, OCR, connector sync, and transactional multi-document publication are future extensions. Multi-point Qdrant writes are retry-safe but do not promise all-or-nothing document visibility. Kubernetes manifests are deployment building blocks, not a claim that your cluster is already production-certified.
 
 No license file is currently supplied. Obtain the owner's permission before relying on a redistribution license.
+
+Documentation basis: [`4a224577196a7f086f49de1ec532978a72b40227`](https://github.com/akilanpl/enterprise-rag-platform/tree/4a224577196a7f086f49de1ec532978a72b40227). Architecture and deployment configuration describe implemented boundaries; no unmeasured quality, latency or adoption result is implied.
